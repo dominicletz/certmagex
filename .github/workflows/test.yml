@@ -1,0 +1,19 @@
+name: "Test"
+on: ["push", "pull_request"]
+
+jobs:
+  test_and_build:
+    name: "Compile & Lint"
+    runs-on: "ubuntu-latest"
+    steps:
+    - name: Setup elixir
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: 24.3.3
+        elixir-version: 1.13.4
+
+    - uses: actions/checkout@v1
+    - run: |
+        mix deps.get
+        mix lint
+        mix test
