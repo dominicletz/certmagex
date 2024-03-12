@@ -4,20 +4,20 @@ Automatic SSL certs from Let's Encrypt for your Phoenix applications.
 
 ## Installation
 
+For Cowboy add to your prod.exs:
+
+```elixir
+config <your_app>, <your_endpoint>,
+  https: [port: 443, sni_fun: &CertMagex.sni_fun/1],
+  # ATTENTION: Ensure you comment http: out and port 80 is free!
+  ...
+```
+
 For Bandit add to your prod.exs:
 
 ```elixir
 config <your_app>, <your_endpoint>,
   https: [port: 443, thousand_island_options: [transport_options: [sni_fun: &CertMagex.sni_fun/1]]],
-  # ATTENTION: Ensure you comment http: out and port 80 is free!
-  ...
-```
-
-For Cowboy add to your prod.exs:
-
-```elixir
-config <your_app>, <your_endpoint>,
-  https: [port: 443, transport_options: [sni_fun: &CertMagex.sni_fun/1]],
   # ATTENTION: Ensure you comment http: out and port 80 is free!
   ...
 ```

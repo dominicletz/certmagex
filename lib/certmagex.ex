@@ -4,21 +4,21 @@ defmodule CertMagex do
 
   ## Installation
 
+  For Cowboy add to your prod.exs:
+
+  ```elixir
+  config <your_app>, <your_endpoint>,
+    # ATTENTION: Ensure you comment http: out and port 80 is free!
+    https: [port: 443, sni_fun: &CertMagex.sni_fun/1],
+    ...
+  ```
+
   For Bandit add to your prod.exs:
 
   ```elixir
   config <your_app>, <your_endpoint>,
     # ATTENTION: Ensure you comment http: out and port 80 is free!
     https: [port: 443, thousand_island_options: [transport_options: [sni_fun: &CertMagex.sni_fun/1]]],
-    ...
-  ```
-
-  For Cowboy add to your prod.exs:
-
-  ```elixir
-  config <your_app>, <your_endpoint>,
-    # ATTENTION: Ensure you comment http: out and port 80 is free!
-    https: [port: 443, transport_options: [sni_fun: &CertMagex.sni_fun/1]],
     ...
   ```
   """
@@ -36,7 +36,7 @@ defmodule CertMagex do
   ```elixir
   config <your_app>, <your_endpoint>,
     # ATTENTION: Ensure you comment http: out and port 80 is free!
-    https: [port: 443, transport_options: [sni_fun: &CertMagex.sni_fun/1]],
+    https: [port: 443, sni_fun: &CertMagex.sni_fun/1],
     ...
   ```
   """
