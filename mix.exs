@@ -33,7 +33,7 @@ defmodule CertMagex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:zerossl, "~> 1.0", app: false},
+      {:zerossl, "~> 1.0", runtime: false},
       {:dets_plus, "~> 2.1"},
       {:httpoison, "~> 2.0"},
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
