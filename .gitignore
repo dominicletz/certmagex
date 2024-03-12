@@ -24,3 +24,6 @@ certmagex-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# This is a library
+mix.lock
