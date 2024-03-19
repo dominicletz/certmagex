@@ -4,6 +4,8 @@ defmodule CertMagex.Application do
   @moduledoc false
 
   use Application
+  # not real infinity, but it's a big number
+  @infinity 1_000_000
 
   @impl true
   def start(_type, _args) do
@@ -17,7 +19,7 @@ defmodule CertMagex.Application do
     end
 
     children = [CertMagex.Worker]
-    opts = [strategy: :one_for_one, name: CertMagex.Supervisor]
+    opts = [max_restarts: @infinity, strategy: :one_for_one, name: CertMagex.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end
