@@ -41,6 +41,22 @@ defmodule CertMagex do
   ```
   """
   def sni_fun(domain) when is_binary(domain) do
+    if ip?(domain) do
+      Logger.warning("CertMagex: IP address detected, skipping certificate generation")
+      :undefined
+    else
+      cache_or_gen_cert(domain)
+    end
+  end
+
+  defp ip?(domain) do
+    case :inet.parse_address(String.to_charlist(domain)) do
+      {:ok, _} -> true
+      _ -> false
+    end
+  end
+
+  defp cache_or_gen_cert(domain) do
     now = DateTime.utc_now()
 
     case Storage.lookup({:cache, domain}) do
