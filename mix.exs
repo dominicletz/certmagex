@@ -18,15 +18,17 @@ defmodule CertMagex.MixProject do
       package: package(),
       homepage_url: @url,
       aliases: aliases(),
-      description: "Automatic SSL certificates for your Apps"
+      description: "Automatic SSL certificates for your Apps",
+      dialyzer: [plt_add_apps: [:zerossl]]
     ]
   end
 
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {CertMagex.Application, []}
+      extra_applications: [:logger, :inets],
+      mod: {CertMagex.Application, []},
+      included_applications: [:zerossl]
     ]
   end
 
