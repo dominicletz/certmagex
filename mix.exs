@@ -1,7 +1,7 @@
 defmodule CertMagex.MixProject do
   use Mix.Project
 
-  @version "1.0.1"
+  @version "1.0.2"
   @name "CertMagex"
   @url "https://github.com/dominicletz/certmagex"
   @maintainers ["Dominic Letz"]
