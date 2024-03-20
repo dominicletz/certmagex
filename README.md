@@ -27,7 +27,7 @@ And add this to your deps:
 ```elixir
 def deps do
   [
-    {:certmagex, "~> 1.0.0"}
+    {:certmagex, "~> 1.0"}
   ]
 end
 ```
