@@ -18,7 +18,7 @@ defmodule CertMagex.MixProject do
       package: package(),
       homepage_url: @url,
       aliases: aliases(),
-      description: "Automatic Let's Encrypt certificates for your Apps",
+      description: "Automatic Letsencrypt certificates for your ssl sockets and https phoenix apps",
       dialyzer: [plt_add_apps: [:zerossl]]
     ]
   end
