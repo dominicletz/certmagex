@@ -1,7 +1,7 @@
 defmodule CertMagex.MixProject do
   use Mix.Project
 
-  @version "1.0.2"
+  @version "1.0.3"
   @name "CertMagex"
   @url "https://github.com/dominicletz/certmagex"
   @maintainers ["Dominic Letz"]
@@ -18,7 +18,7 @@ defmodule CertMagex.MixProject do
       package: package(),
       homepage_url: @url,
       aliases: aliases(),
-      description: "Automatic SSL certificates for your Apps",
+      description: "Automatic Let's Encrypt certificates for your Apps",
       dialyzer: [plt_add_apps: [:zerossl]]
     ]
   end
