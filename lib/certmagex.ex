@@ -49,6 +49,14 @@ defmodule CertMagex do
     end
   end
 
+  def insert(domain, cert_priv_key, public_cert) do
+    certs = decode_certs(public_cert)
+    validity = validity_time(certs)
+    key = decode_priv_key(cert_priv_key)
+    Storage.insert({:cache, domain}, {{certs, key}, validity})
+    {certs, key}
+  end
+
   defp ip?(domain) do
     case :inet.parse_address(String.to_charlist(domain)) do
       {:ok, _} -> true
@@ -78,10 +86,7 @@ defmodule CertMagex do
   defp gen_cert(domain) do
     case Storage.lookup(domain) || Worker.gen_cert(domain) do
       {:ok, {cert_priv_key, public_cert}} ->
-        certs = decode_certs(public_cert)
-        validity = validity_time(certs)
-        key = decode_priv_key(cert_priv_key)
-        Storage.insert({:cache, domain}, {{certs, key}, validity})
+        {certs, key} = insert(domain, cert_priv_key, public_cert)
         [cert: certs, key: key]
 
       {:error, reason} ->
