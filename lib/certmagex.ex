@@ -49,7 +49,13 @@ defmodule CertMagex do
     end
   end
 
-  def insert(domain, cert_priv_key, public_cert) do
+  def insert(cert_priv_key, public_cert) do
+    for domain <- :certmagex.domains(public_cert) do
+      insert(List.to_string(domain), cert_priv_key, public_cert)
+    end
+  end
+
+  def insert(domain, cert_priv_key, public_cert) when is_binary(domain) do
     certs = decode_certs(public_cert)
     validity = validity_time(certs)
     key = decode_priv_key(cert_priv_key)
