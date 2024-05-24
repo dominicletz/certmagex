@@ -50,7 +50,10 @@ defmodule CertMagex do
   end
 
   def insert(cert_priv_key, public_cert) do
-    for domain <- :certmagex.domains(public_cert) do
+    {:Certificate, certbin, :not_encrypted} =
+      :public_key.pem_decode(public_cert) |> List.first()
+
+    for domain <- :certmagex.domains(certbin) do
       insert(List.to_string(domain), cert_priv_key, public_cert)
     end
   end
@@ -116,8 +119,9 @@ defmodule CertMagex do
   defp decode_priv_key(pem) do
     {type, bin, :not_encrypted} =
       :public_key.pem_decode(pem)
-      |> Enum.find(fn {type, _bin, _} ->
-        type in [:RSAPrivateKey, :DSAPrivateKey, :ECPrivateKey]
+      |> Enum.find(fn {type, _bin, flag} ->
+        flag == :not_encrypted and
+          type in [:RSAPrivateKey, :DSAPrivateKey, :ECPrivateKey, :PrivateKeyInfo]
       end)
 
     {type, bin}
