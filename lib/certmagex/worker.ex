@@ -42,7 +42,7 @@ defmodule CertMagex.Worker do
         {:reply, {:ok, {{certs, key}, validity}}, state}
       end
     else
-      {:reply, result, state}
+      {:reply, {:ok, result}, state}
     end
   end
 
