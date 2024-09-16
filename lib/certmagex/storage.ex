@@ -19,9 +19,9 @@ defmodule CertMagex.Storage do
     end
   end
 
-  def init() do
+  def child() do
     File.mkdir_p!(directory())
-    {:ok, _dets} = DetsPlus.open_file(__MODULE__, file: Path.join(directory(), "storage.dets+"))
+    {DetsPlus, name: __MODULE__, file: Path.join(directory(), "storage.dets+")}
   end
 
   def insert(domain, value) do

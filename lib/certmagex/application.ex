@@ -18,7 +18,7 @@ defmodule CertMagex.Application do
       Application.put_env(:zerossl, :storage_module, CertMagex.Storage.Acmev2Adapter)
     end
 
-    children = [CertMagex.Worker]
+    children = [CertMagex.Storage.child(), CertMagex.Worker]
     opts = [max_restarts: @infinity, strategy: :one_for_one, name: CertMagex.Supervisor]
     Supervisor.start_link(children, opts)
   end
