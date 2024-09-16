@@ -10,25 +10,60 @@ defmodule CertMagex.Worker do
 
   @impl true
   def init(:ok) do
-    Storage.init()
     {:ok, %__MODULE__{}}
   end
 
   def gen_cert(domain) do
-    GenServer.call(__MODULE__, {:gen_cert, domain}, :infinity)
+    with {:error, :rate_limit} <- GenServer.call(__MODULE__, {:gen_cert, domain}, :infinity) do
+      Process.sleep(3_000)
+      gen_cert(domain)
+    end
+  end
+
+  def cast_gen_cert(domain) do
+    GenServer.cast(__MODULE__, {:gen_cert, domain})
   end
 
   @impl true
   def handle_call({:gen_cert, domain}, _from, state) do
-    case Storage.lookup(domain) do
-      nil ->
-        {cert_priv_key, public_cert} = Acmev2.gen_cert(domain)
-        result = {:ok, {cert_priv_key, public_cert}}
-        :ok = Storage.insert(domain, result)
-        {:reply, result, state}
+    result = lookup_domain(domain)
 
-      result ->
-        {:reply, result, state}
+    if needs_renewal(result) do
+      now = System.os_time(:second)
+      last_request = Storage.lookup({:last_request, domain}) || 0
+
+      if last_request + 15 > now do
+        {:reply, {:error, :rate_limit}, state}
+      else
+        Storage.insert({:last_request, domain}, now)
+        {cert_priv_key, public_cert} = Acmev2.gen_cert(domain)
+        :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
+        {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
+        {:reply, {:ok, {{certs, key}, validity}}, state}
+      end
+    else
+      {:reply, result, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:gen_cert, domain}, state) do
+    {:reply, _result, state} = handle_call({:gen_cert, domain}, nil, state)
+    {:noreply, state}
+  end
+
+  def needs_renewal(nil), do: true
+
+  def needs_renewal({{_cert, _key}, validity}) do
+    now = DateTime.utc_now()
+    DateTime.diff(validity, now, :second) < 86_400
+  end
+
+  def lookup_domain(domain) do
+    case Storage.lookup({:cache, domain}) || Storage.lookup(domain) do
+      {{cert, key}, validity} -> {{cert, key}, validity}
+      {:ok, {cert_priv_key, public_cert}} -> CertMagex.insert(domain, cert_priv_key, public_cert)
+      nil -> nil
     end
   end
 end

@@ -49,6 +49,9 @@ defmodule CertMagex do
     end
   end
 
+  @doc """
+  Insert a certificate into the cache. Automatically detects all domains in the certificate.
+  """
   def insert(cert_priv_key, public_cert) do
     {:Certificate, certbin, :not_encrypted} =
       :public_key.pem_decode(public_cert) |> List.first()
@@ -58,12 +61,15 @@ defmodule CertMagex do
     end
   end
 
+  @doc """
+  Insert a certificate into the cache for a specific domain.
+  """
   def insert(domain, cert_priv_key, public_cert) when is_binary(domain) do
     certs = decode_certs(public_cert)
     validity = validity_time(certs)
     key = decode_priv_key(cert_priv_key)
     Storage.insert({:cache, domain}, {{certs, key}, validity})
-    {certs, key}
+    {{certs, key}, validity}
   end
 
   defp ip?(domain) do
@@ -74,17 +80,27 @@ defmodule CertMagex do
   end
 
   defp cache_or_gen_cert(domain) do
-    now = DateTime.utc_now()
+    case CertMagex.Worker.lookup_domain(domain) do
+      ret = {{cert, key}, validity} ->
+        now = DateTime.utc_now()
 
-    case Storage.lookup({:cache, domain}) do
-      {{cert, key}, validity} ->
-        if div(DateTime.diff(validity, now, :second), 86_400) > 0 do
-          [cert: cert, key: key]
-        else
-          Logger.info("CertMagex: Certificate expired for #{domain}, regenerating...")
-          Storage.delete({:cache, domain})
-          Storage.delete(domain)
-          gen_cert(domain)
+        cond do
+          # More than one day of validity left
+          CertMagex.Worker.needs_renewal(ret) == false ->
+            [cert: cert, key: key]
+
+          # Still valid but less than one full day
+          DateTime.diff(validity, now, :second) > 0 ->
+            Logger.info("CertMagex: Certificate for #{domain} expires soon regenerating...")
+            Worker.cast_gen_cert(domain)
+            [cert: cert, key: key]
+
+          # Expired
+          true ->
+            Logger.info("CertMagex: Certificate expired for #{domain}, regenerating...")
+            Storage.delete({:cache, domain})
+            Storage.delete(domain)
+            gen_cert(domain)
         end
 
       nil ->
@@ -93,10 +109,9 @@ defmodule CertMagex do
   end
 
   defp gen_cert(domain) do
-    case Storage.lookup(domain) || Worker.gen_cert(domain) do
-      {:ok, {cert_priv_key, public_cert}} ->
-        {certs, key} = insert(domain, cert_priv_key, public_cert)
-        [cert: certs, key: key]
+    case Worker.gen_cert(domain) do
+      {:ok, {{cert, key}, _validity}} ->
+        [cert: cert, key: key]
 
       {:error, reason} ->
         Logger.error("CertMagex Error: #{inspect(reason)}")
