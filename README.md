@@ -1,6 +1,8 @@
 # CertMagex
 
-Automatic SSL certs from Let's Encrypt for your Phoenix applications.
+Automatic SSL certs from Let's Encrypt for your Phoenix applications. This is based on the [ZeroSSL](https://github.com/riccardomanfrin/zerossl) library which is used for the ACME handshake. Plugging into the `sni_fun` and the name is inspired by similiar functionality of the golang [certmagic](https://github.com/caddyserver/certmagic) library.
+
+This is used in the real world for example on [https://tcpbin.net](https://tcpbin.net).
 
 ## Installation
 
@@ -33,7 +35,6 @@ end
 ```
 
 You're done!
-
 
 # Notes
 
