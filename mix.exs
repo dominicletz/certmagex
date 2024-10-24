@@ -19,8 +19,7 @@ defmodule CertMagex.MixProject do
       homepage_url: @url,
       aliases: aliases(),
       description:
-        "Automatic Letsencrypt certificates for your ssl sockets and https phoenix apps",
-      dialyzer: [plt_add_apps: [:zerossl]]
+        "Automatic Letsencrypt certificates for your ssl sockets and https phoenix apps"
     ]
   end
 
@@ -28,20 +27,20 @@ defmodule CertMagex.MixProject do
   def application do
     [
       extra_applications: [:logger, :inets],
-      mod: {CertMagex.Application, []},
-      included_applications: [:zerossl]
+      mod: {CertMagex.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:zerossl, "~> 1.0", runtime: false},
       {:dets_plus, "~> 2.4"},
       {:httpoison, "~> 2.0"},
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.2", only: [:dev], runtime: false}
+      {:dialyxir, "~> 1.2", only: [:dev], runtime: false},
+      {:jason, "~> 1.4"},
+      {:x509, "~> 0.8"},
     ]
   end
 

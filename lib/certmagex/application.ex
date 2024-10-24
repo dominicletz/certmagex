@@ -9,13 +9,8 @@ defmodule CertMagex.Application do
 
   @impl true
   def start(_type, _args) do
-    # We're updating the default to use let's encrypt
-    if Application.get_env(:zerossl, :provider) == nil do
-      Application.put_env(:zerossl, :provider, :letsencrypt)
-    end
-
-    if Application.get_env(:zerossl, :storage_module) == nil do
-      Application.put_env(:zerossl, :storage_module, CertMagex.Storage.Acmev2Adapter)
+    if Application.get_env(:certmagex, :storage_module) == nil do
+      Application.put_env(:certmagex, :storage_module, CertMagex.Storage.Acmev2Adapter)
     end
 
     children = [CertMagex.Storage.child(), CertMagex.Worker]

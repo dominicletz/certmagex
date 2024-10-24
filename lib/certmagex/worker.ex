@@ -1,6 +1,6 @@
 defmodule CertMagex.Worker do
   @moduledoc false
-  alias CertMagex.Storage
+  alias CertMagex.{Acmev2, Storage}
   use GenServer, restart: :permanent
   defstruct []
 
