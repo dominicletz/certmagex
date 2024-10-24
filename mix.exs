@@ -1,7 +1,7 @@
 defmodule CertMagex.MixProject do
   use Mix.Project
 
-  @version "1.0.5"
+  @version "1.0.6"
   @name "CertMagex"
   @url "https://github.com/dominicletz/certmagex"
   @maintainers ["Dominic Letz"]
@@ -40,7 +40,7 @@ defmodule CertMagex.MixProject do
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.2", only: [:dev], runtime: false},
       {:jason, "~> 1.4"},
-      {:x509, "~> 0.8"},
+      {:x509, "~> 0.8"}
     ]
   end
 
