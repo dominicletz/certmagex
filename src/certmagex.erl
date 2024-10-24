@@ -10,7 +10,7 @@ domains(Certbin) ->
     #'OTPCertificate'{tbsCertificate = #'OTPTBSCertificate'{subject = {rdnSequence, Subjects}, extensions = Extensions}} = public_key:pkix_decode_cert(Certbin, otp),
     [[{'AttributeTypeAndValue', {2, 5, 4, 3}, {printableString, Subject}}]] = Subjects,
     Names = lists:flatten([Names || {'Extension', {2, 5, 29, 17}, _, Names} <- Extensions]),
-    lists:uniq([Subject] ++ [Name || {dNSName, Name} <- Names]).
+    'Elixir.Enum':uniq([Subject] ++ [Name || {dNSName, Name} <- Names]).
 
 time_str_2_gregorian_sec({utcTime, [Y1,Y2,M1,M2,D1,D2,H1,H2,M3,M4,S1,S2,Z]}) ->
     case list_to_integer([Y1,Y2]) of
