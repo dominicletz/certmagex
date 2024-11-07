@@ -479,20 +479,30 @@ defmodule CertMagex.Acmev2 do
     {new_nonce, chall_uri, token}
   end
 
-  defp processing_state_retry(fun, nonce, args, awaited) do
+  defp processing_state_retry(fun, nonce, args, awaited, times \\ 10)
+
+  defp processing_state_retry(fun, nonce, args, awaited, 0) do
+    [_nonce, resp_body | _rest] = response = apply(fun, [nonce, args])
+
+    if resp_body.status in awaited do
+      response
+    else
+      raise "Operation failed with status: #{resp_body.status} (#{inspect(resp_body)})"
+    end
+  end
+
+  defp processing_state_retry(fun, nonce, args, awaited, times) do
     [nonce, resp_body | _rest] = response = apply(fun, [nonce, args])
 
-    case resp_body.status in awaited do
-      true ->
-        response
+    if resp_body.status in awaited do
+      response
+    else
+      Logger.debug(
+        "Operation status: #{resp_body.status} (#{inspect(resp_body)}) => Retrying in 5 seconds..."
+      )
 
-      _ ->
-        Logger.debug(
-          "Operation status: #{resp_body.status} (#{inspect(resp_body)}) => Retrying in 5 seconds..."
-        )
-
-        Process.sleep(5000)
-        processing_state_retry(fun, nonce, args, awaited)
+      Process.sleep(5000)
+      processing_state_retry(fun, nonce, args, awaited, times - 1)
     end
   end
 
