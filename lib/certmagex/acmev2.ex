@@ -35,7 +35,11 @@ defmodule CertMagex.Acmev2 do
   @app :certmagex
   defp account_key(), do: Application.get_env(@app, :account_key)
   defp acme_uri(), do: @provider_api[provider()]
-  defp http_addr(), do: Application.get_env(@app, :addr, "0.0.0.0")
+
+  defp http_addr() do
+    Application.get_env(@app, :addr, nil) || if ipv6?(), do: "::", else: "0.0.0.0"
+  end
+
   defp http_port(), do: Application.get_env(@app, :port, 80)
   defp provider(), do: Application.get_env(@app, :provider, :letsencrypt)
   defp require_external_account_binding(), do: provider() in [:zerossl]
@@ -542,6 +546,20 @@ defmodule CertMagex.Acmev2 do
 
   defp thumbprint(account_key) do
     :crypto.hash(:sha256, jenc(account_key))
+  end
+
+  defp ipv6?() do
+    case :gen_tcp.connect({0, 0, 0, 0, 0, 0, 0, 0}, 0, []) do
+      {:error, :econnrefused} ->
+        true
+
+      {:ok, port} ->
+        :gen_tcp.close(port)
+        true
+
+      {:error, :eaddrnotavail} ->
+        false
+    end
   end
 
   defp serve(token) do
