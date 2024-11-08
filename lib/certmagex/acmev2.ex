@@ -559,6 +559,13 @@ defmodule CertMagex.Acmev2 do
 
       {:error, :eaddrnotavail} ->
         false
+
+      {:error, :enetunreach} ->
+        false
+
+      {:error, other} ->
+        Logger.warning("Unhandled ipv6 detection error: #{inspect(other)}")
+        false
     end
   end
 
