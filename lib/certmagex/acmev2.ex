@@ -591,14 +591,8 @@ defmodule CertMagex.Acmev2 do
   end
 
   defp stop_serving(pid) do
-    case :inets.stop(:httpd, pid) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error("Cannot stop httpd server: #{inspect(reason)}")
-        :ok
-    end
+    Process.unlink(pid)
+    Process.exit(pid, :shutdown)
   end
 
   # defp gen_csr_erl() do
