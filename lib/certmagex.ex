@@ -53,8 +53,7 @@ defmodule CertMagex do
   Insert a certificate into the cache. Automatically detects all domains in the certificate.
   """
   def insert(cert_priv_key, public_cert) do
-    {:Certificate, certbin, :not_encrypted} =
-      :public_key.pem_decode(public_cert) |> List.first()
+    {:Certificate, certbin, :not_encrypted} = :public_key.pem_decode(public_cert) |> List.first()
 
     for domain <- :certmagex.domains(certbin) do
       insert(List.to_string(domain), cert_priv_key, public_cert)

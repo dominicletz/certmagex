@@ -98,16 +98,8 @@ defmodule CertMagex.Acmev2 do
   defp jenc(data), do: Jason.encode!(data)
 
   defp calcjwk() do
-    {:ok, eckey} = storage_module().read("ec.key")
-
-    ecdsa_key(publicKey: publicKey) =
-      hd(:public_key.pem_decode(eckey))
-      |> :public_key.pem_entry_decode()
-
-    [_h | xy] =
-      publicKey
-      |> :erlang.binary_to_list()
-
+    ecdsa_key(publicKey: public_key) = ensure_ec_key()
+    [_h | xy] = :erlang.binary_to_list(public_key)
     [x, y] = xy |> Enum.chunk_every(32)
 
     %{
@@ -118,7 +110,7 @@ defmodule CertMagex.Acmev2 do
     }
   end
 
-  defp create_domain_ec_key() do
+  defp ensure_ec_key() do
     # Create a generic Elliptic Curve key to use as Account Key in the ACMEv2 protocol
     # This key is associated with the user account and can be used multiple times.
     # In general the key can be used for revoking of the certificate and other operations.
@@ -136,23 +128,23 @@ defmodule CertMagex.Acmev2 do
 
     case storage_module().exists?("ec.key") do
       true ->
-        :ok
+        {:ok, eckey} = storage_module().read("ec.key")
+        eckey
 
       false ->
         key = :public_key.generate_key({:namedCurve, :secp256r1})
         pem_entry = :public_key.pem_entry_encode(:ECPrivateKey, key)
         domain_ec_key = :public_key.pem_encode([pem_entry])
         storage_module().write("ec.key", domain_ec_key)
+        domain_ec_key
     end
+    |> :public_key.pem_decode()
+    |> hd()
+    |> :public_key.pem_entry_decode()
   end
 
   defp es256sign(payload) do
-    {:ok, eckey} = storage_module().read("ec.key")
-
-    eckey =
-      hd(:public_key.pem_decode(eckey))
-      |> :public_key.pem_entry_decode()
-
+    eckey = ensure_ec_key()
     signature = :public_key.sign(payload, :sha256, eckey)
 
     # Equivalent yet short version of the stuff below
@@ -244,8 +236,7 @@ defmodule CertMagex.Acmev2 do
 
       _ ->
         try do
-          {:ok, _response} =
-            HTTPoison.request(method, uri, body, headers, recv_timeout: 10000)
+          {:ok, _response} = HTTPoison.request(method, uri, body, headers, recv_timeout: 10_000)
         rescue
           error ->
             Logger.info("Troubles contacting ACMEv2 provider: #{inspect(error)}")
@@ -339,11 +330,10 @@ defmodule CertMagex.Acmev2 do
         email -> ["mailto:#{email}"]
       end
 
-    payload =
-      %{
-        "contact" => contact,
-        "termsOfServiceAgreed" => true
-      }
+    payload = %{
+      "contact" => contact,
+      "termsOfServiceAgreed" => true
+    }
 
     payload =
       case eab_credentials do
@@ -474,8 +464,7 @@ defmodule CertMagex.Acmev2 do
 
     new_nonce = get_nonce_from_resp(authz_res)
 
-    %{challenges: challanges} =
-      Jason.decode!(bin, keys: :atoms)
+    %{challenges: challanges} = Jason.decode!(bin, keys: :atoms)
 
     [%{url: chall_uri, type: "http-01", token: token}] =
       Enum.filter(challanges, &(&1.type == "http-01"))
@@ -808,7 +797,7 @@ defmodule CertMagex.Acmev2 do
     nonce = get_new_nonce(ops)
 
     Logger.debug("Check or forge ec.key")
-    create_domain_ec_key()
+    _eckey = ensure_ec_key()
 
     Logger.debug("Get new account")
     {nonce, account_location, _new_account_res} = post_new_account(ops, nonce, eab_credentials)
