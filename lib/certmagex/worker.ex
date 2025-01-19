@@ -56,7 +56,11 @@ defmodule CertMagex.Worker do
 
   def needs_renewal({{_cert, _key}, validity}) do
     now = DateTime.utc_now()
-    DateTime.diff(validity, now, :second) < 86_400
+    DateTime.diff(validity, now, :second) < renewal_threshold()
+  end
+
+  def renewal_threshold() do
+    Application.get_env(:certmagex, :renewal_threshold, 86_400)
   end
 
   def lookup_domain(domain) do

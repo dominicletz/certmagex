@@ -1,6 +1,6 @@
 # CertMagex
 
-Automatic SSL certs from Let's Encrypt for your Phoenix applications. This is based on the [ZeroSSL](https://github.com/riccardomanfrin/zerossl) library which is used for the ACME handshake. Plugging into the `sni_fun` and the name is inspired by similiar functionality of the golang [certmagic](https://github.com/caddyserver/certmagic) library.
+Automatic SSL certs from Let's Encrypt for your Phoenix applications. This is based on the [ZeroSSL](https://github.com/riccardomanfrin/zerossl) library which is used for the ACME handshake. Plugging into the `sni_fun` and the name is inspired by similar functionality of the golang [certmagic](https://github.com/caddyserver/certmagic) library.
 
 This is used in the real world for example on [https://tcpbin.net](https://tcpbin.net).
 
@@ -35,6 +35,30 @@ end
 ```
 
 You're done!
+
+## Optional Configuration values
+
+The following configuration values are optional and can be set in your `config.exs` file.
+
+- `user_email`: The email to use for the ACME handshake. Let's encrypt might send informational emails to this address.
+- `provider`: The provider to use for the ACME handshake. Can be `:letsencrypt` or `:zerossl`. Defaults to `:letsencrypt`.
+- `account_key`: The account key to use for the ACME handshake. Required only for `:zerossl` provider.
+- `addr`: The address to bind to for the ACME handshake. Defaults to `0.0.0.0` on IPv4 and `::` on IPv6.
+- `port`: The port to bind to for the ACME handshake. Defaults to `80`.
+- `storage_module`: The module to use for storage. Defaults to `CertMagex.Storage.Acmev2Adapter`. Changing the module allows storing retrieved certificates in a different storage location.
+- `renewal_threshold`: The threshold for certificate renewal. Defaults to renewing certificates if they have `86_400` seconds (1 day) of validity left.
+
+Example `config.exs`
+
+```elixir
+config :certmagex,
+  provider: :zerossl,
+  account_key: System.get_env("ZEROSSL_ACCOUNT_KEY"),
+  addr: "0.0.0.0",
+  port: 80,
+  user_email: "your@email.com",
+  storage_module: CertMagex.Storage.Acmev2Adapter
+```
 
 # Notes
 
