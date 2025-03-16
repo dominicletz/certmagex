@@ -528,6 +528,35 @@ defmodule CertMagex.Acmev2 do
     [new_nonce, resp_body]
   end
 
+  defp poll_authz(nonce, [account_location, authz_uri]) do
+    protected =
+      %{
+        alg: "ES256",
+        kid: account_location,
+        nonce: nonce,
+        url: authz_uri
+      }
+      |> enc()
+
+    payload = ""
+
+    body =
+      %{
+        protected: protected,
+        payload: payload,
+        signature: es256sign("#{protected}.#{payload}")
+      }
+      |> jenc()
+
+    {:ok, %HTTPoison.Response{body: bin} = authz_res} =
+      post(authz_uri, body, "Content-Type": "application/jose+json")
+
+    new_nonce = get_nonce_from_resp(authz_res)
+    resp_body = Jason.decode!(bin, keys: :atoms)
+
+    [new_nonce, resp_body]
+  end
+
   defp gen_key_authorization(token) do
     account_key = calcjwk()
     "#{token}.#{benc(thumbprint(account_key))}"
@@ -810,8 +839,13 @@ defmodule CertMagex.Acmev2 do
 
     Logger.debug("Checking challenge http.1 validity")
 
-    [nonce, %{token: ^token}] =
-      processing_state_retry(&post_chall/2, nonce, [account_location, chall_uri], ["valid"])
+    [nonce, _authz_response] =
+      processing_state_retry(
+        &poll_authz/2,
+        nonce,
+        [account_location, new_order_res.authorizations |> hd],
+        ["valid"]
+      )
 
     Logger.debug("Challenge http.1 checking valid")
 
