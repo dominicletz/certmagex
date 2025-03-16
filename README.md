@@ -44,7 +44,6 @@ The following configuration values are optional and can be set in your `config.e
 - `provider`: The provider to use for the ACME handshake. Can be `:letsencrypt` or `:zerossl`. Defaults to `:letsencrypt`.
 - `account_key`: The account key to use for the ACME handshake. Required only for `:zerossl` provider.
 - `addr`: The address to bind to for the ACME handshake. Defaults to `0.0.0.0` on IPv4 and `::` on IPv6.
-- `port`: The port to bind to for the ACME handshake. Defaults to `80`.
 - `storage_module`: The module to use for storage. Defaults to `CertMagex.Storage.Acmev2Adapter`. Changing the module allows storing retrieved certificates in a different storage location.
 - `renewal_threshold`: The threshold for certificate renewal. Defaults to renewing certificates if they have `86_400` seconds (1 day) of validity left.
 
@@ -55,7 +54,6 @@ config :certmagex,
   provider: :zerossl,
   account_key: System.get_env("ZEROSSL_ACCOUNT_KEY"),
   addr: "0.0.0.0",
-  port: 80,
   user_email: "your@email.com",
   storage_module: CertMagex.Storage.Acmev2Adapter
 ```

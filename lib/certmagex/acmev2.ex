@@ -40,7 +40,18 @@ defmodule CertMagex.Acmev2 do
     Application.get_env(@app, :addr, nil) || if ipv6?(), do: "::", else: "0.0.0.0"
   end
 
-  defp http_port(), do: Application.get_env(@app, :port, 80)
+  defp http_port() do
+    port = Application.get_env(@app, :port, 80)
+
+    if port != 80 do
+      Logger.warning(
+        "Using non-standard HTTP port: #{port} for Let's Encrypt. This will NOT WORK unless you redirect port 80 to #{port} in some other way."
+      )
+    end
+
+    port
+  end
+
   defp provider(), do: Application.get_env(@app, :provider, :letsencrypt)
   defp require_external_account_binding(), do: provider() in [:zerossl]
 
