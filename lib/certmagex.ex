@@ -44,7 +44,10 @@ defmodule CertMagex do
     provider = Application.get_env(:certmagex, :provider, :letsencrypt)
 
     if ip?(domain) and provider not in [:letsencrypt, :letsencrypt_test] do
-      Logger.warning("CertMagex: IP address detected, skipping (IP certs only with provider :letsencrypt or :letsencrypt_test)")
+      Logger.warning(
+        "CertMagex: IP address detected, skipping (IP certs only with provider :letsencrypt or :letsencrypt_test)"
+      )
+
       :undefined
     else
       cache_or_gen_cert(domain)
