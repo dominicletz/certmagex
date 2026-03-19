@@ -56,6 +56,19 @@ defmodule CertMagex do
   end
 
   @doc """
+  Returns the SSL options for the given domain. This is useful for IP based SSL certificates.
+  Info: https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability
+
+  This will generate `[cert: cert, key: key]` that can merged into your existing SSL options.
+  """
+  def ssl_opts(domain) do
+    case sni_fun(domain) do
+      opts when is_list(opts) -> opts
+      _ -> []
+    end
+  end
+
+  @doc """
   Returns true if the given string is a valid IPv4 or IPv6 address.
   """
   def ip?(domain) when is_binary(domain) do
