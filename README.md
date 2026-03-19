@@ -47,6 +47,10 @@ The following configuration values are optional and can be set in your `config.e
 - `storage_module`: The module to use for storage. Defaults to `CertMagex.Storage.Acmev2Adapter`. Changing the module allows storing retrieved certificates in a different storage location.
 - `renewal_threshold`: The threshold for certificate renewal. Defaults to renewing certificates if they have `86_400` seconds (1 day) of validity left.
 
+### IP address certificates
+
+When using **Let's Encrypt** (`provider: :letsencrypt` or `:letsencrypt_test`), certmagex can issue certificates for **IP addresses** (IPv4 and IPv6). IP certificates are short-lived (~6 days) and require reliable automated renewal. They are not supported with the `:zerossl` provider. If the SNI callback receives an IP and the provider does not support IP certs, no certificate is generated (and a warning is logged).
+
 Example `config.exs`
 
 ```elixir
