@@ -657,7 +657,12 @@ defmodule CertMagex.Acmev2 do
       if CertMagex.ip?(domain) do
         ip_binary = ip_string_to_binary!(domain)
         # OTP's public_key uses the GeneralName choice type `iPAddress` (capital P).
-        san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_binary}])
+        # X509's typespec expects `{atom(), charlist()}` for tuple SAN entries; octets as a
+        # charlist satisfy Dialyzer and encode the same as a binary iPAddress.
+        san =
+          X509.Certificate.Extension.subject_alt_name([
+            {:iPAddress, :binary.bin_to_list(ip_binary)}
+          ])
 
         X509.CSR.new(key, "CN=", extension_request: [san])
         |> X509.CSR.to_der()

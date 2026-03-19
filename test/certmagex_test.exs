@@ -47,8 +47,8 @@ defmodule CertMagexTest do
 
     test "accepts iPAddress SAN for IPv4" do
       key = X509.PrivateKey.new_ec(:secp256r1)
-      ip_bin = ip_string_to_binary!("192.0.2.1")
-      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_bin}])
+      ip_octets = ip_string_to_binary!("192.0.2.1") |> :binary.bin_to_list()
+      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_octets}])
 
       assert is_binary(
                X509.CSR.new(key, "CN=", extension_request: [san])
@@ -58,8 +58,8 @@ defmodule CertMagexTest do
 
     test "accepts iPAddress SAN for IPv6" do
       key = X509.PrivateKey.new_ec(:secp256r1)
-      ip_bin = ip_string_to_binary!("2001:db8::1")
-      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_bin}])
+      ip_octets = ip_string_to_binary!("2001:db8::1") |> :binary.bin_to_list()
+      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_octets}])
 
       assert is_binary(
                X509.CSR.new(key, "CN=", extension_request: [san])
