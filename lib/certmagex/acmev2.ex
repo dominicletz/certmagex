@@ -423,14 +423,16 @@ defmodule CertMagex.Acmev2 do
       |> enc()
 
     payload =
-      %{
-        identifiers: [
-          %{
-            type: "dns",
-            value: domain
-          }
-        ]
-      }
+      if CertMagex.ip?(domain) do
+        %{
+          profile: "shortlived",
+          identifiers: [%{type: "ip", value: domain}]
+        }
+      else
+        %{
+          identifiers: [%{type: "dns", value: domain}]
+        }
+      end
       |> enc()
 
     b64signature = es256sign("#{protected}.#{payload}")
@@ -649,30 +651,36 @@ defmodule CertMagex.Acmev2 do
   # end
 
   defp gen_csr(domain) do
-    # {:ok, file} = :file.read_file("/home/riccardo/.acme.sh/riccardomanfrin.dynu.net_ecc/riccardomanfrin.dynu.net.csr")
-    # csr = hd(:public_key.pem_decode(file))
-    # |> :public_key.pem_entry_decode()
-    #
-    # {:CertificationRequest,
-    #  {:CertificationRequestInfo, :v1,
-    #    rdn,
-    #    cert_req_info_subj,
-    #    [
-    #      attribute_pkcs10
-    #    ]},
-    #  cert_req_sign_alg,
-    #  signature} = csr
-    #  rdn
     key = X509.PrivateKey.new_ec(:secp256r1)
 
-    # File.write("key.pem", X509.PrivateKey.to_pem(key))
-
     csr =
-      X509.CSR.new(key, "CN=#{domain}")
-      |> X509.CSR.to_der()
-      |> benc()
+      if CertMagex.ip?(domain) do
+        ip_binary = ip_string_to_binary!(domain)
+        san = X509.Certificate.Extension.subject_alt_name([{:ipAddress, ip_binary}])
+
+        X509.CSR.new(key, "CN=", extension_request: [san])
+        |> X509.CSR.to_der()
+        |> benc()
+      else
+        X509.CSR.new(key, "CN=#{domain}")
+        |> X509.CSR.to_der()
+        |> benc()
+      end
 
     {X509.PrivateKey.to_pem(key), csr}
+  end
+
+  defp ip_string_to_binary!(ip_string) do
+    case :inet.parse_address(String.to_charlist(ip_string)) do
+      {:ok, {a, b, c, d}} ->
+        <<a, b, c, d>>
+
+      {:ok, {a, b, c, d, e, f, g, h}} ->
+        <<a::16, b::16, c::16, d::16, e::16, f::16, g::16, h::16>>
+
+      _ ->
+        raise "Invalid IP address: #{inspect(ip_string)}"
+    end
   end
 
   defp post_finalize(nonce, [csr, finalize_uri, account_location]) do
@@ -797,6 +805,12 @@ defmodule CertMagex.Acmev2 do
   """
   @spec gen_cert(domain :: binary()) :: {key :: binary(), cert :: binary()}
   def gen_cert(domain) do
+    if CertMagex.ip?(domain) and provider() not in [:letsencrypt, :letsencrypt_test] do
+      raise(
+        "IP certificates are only supported with provider :letsencrypt or :letsencrypt_test, got: #{inspect(provider())}"
+      )
+    end
+
     eab_credentials =
       with {:eab_required, true} <- {:eab_required, require_external_account_binding()},
            {:user_email, user_email} <- {:user_email, user_email()},

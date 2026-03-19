@@ -41,11 +41,23 @@ defmodule CertMagex do
   ```
   """
   def sni_fun(domain) when is_binary(domain) do
-    if ip?(domain) do
-      Logger.warning("CertMagex: IP address detected, skipping certificate generation")
+    provider = Application.get_env(:certmagex, :provider, :letsencrypt)
+
+    if ip?(domain) and provider not in [:letsencrypt, :letsencrypt_test] do
+      Logger.warning("CertMagex: IP address detected, skipping (IP certs only with provider :letsencrypt or :letsencrypt_test)")
       :undefined
     else
       cache_or_gen_cert(domain)
+    end
+  end
+
+  @doc """
+  Returns true if the given string is a valid IPv4 or IPv6 address.
+  """
+  def ip?(domain) when is_binary(domain) do
+    case :inet.parse_address(String.to_charlist(domain)) do
+      {:ok, _} -> true
+      _ -> false
     end
   end
 
@@ -69,13 +81,6 @@ defmodule CertMagex do
     key = decode_priv_key(cert_priv_key)
     Storage.insert({:cache, domain}, {{certs, key}, validity})
     {{certs, key}, validity}
-  end
-
-  defp ip?(domain) do
-    case :inet.parse_address(String.to_charlist(domain)) do
-      {:ok, _} -> true
-      _ -> false
-    end
   end
 
   defp cache_or_gen_cert(domain) do
