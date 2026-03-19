@@ -30,4 +30,41 @@ defmodule CertMagexTest do
       Application.put_env(:certmagex, :provider, :letsencrypt)
     end
   end
+
+  describe "IP SAN CSR generation" do
+    defp ip_string_to_binary!(ip_string) do
+      case :inet.parse_address(String.to_charlist(ip_string)) do
+        {:ok, {a, b, c, d}} ->
+          <<a, b, c, d>>
+
+        {:ok, {a, b, c, d, e, f, g, h}} ->
+          <<a::16, b::16, c::16, d::16, e::16, f::16, g::16, h::16>>
+
+        _ ->
+          raise "Invalid IP address: #{inspect(ip_string)}"
+      end
+    end
+
+    test "accepts iPAddress SAN for IPv4" do
+      key = X509.PrivateKey.new_ec(:secp256r1)
+      ip_bin = ip_string_to_binary!("192.0.2.1")
+      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_bin}])
+
+      assert is_binary(
+               X509.CSR.new(key, "CN=", extension_request: [san])
+               |> X509.CSR.to_der()
+             )
+    end
+
+    test "accepts iPAddress SAN for IPv6" do
+      key = X509.PrivateKey.new_ec(:secp256r1)
+      ip_bin = ip_string_to_binary!("2001:db8::1")
+      san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_bin}])
+
+      assert is_binary(
+               X509.CSR.new(key, "CN=", extension_request: [san])
+               |> X509.CSR.to_der()
+             )
+    end
+  end
 end

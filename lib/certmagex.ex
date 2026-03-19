@@ -41,6 +41,7 @@ defmodule CertMagex do
   ```
   """
   def sni_fun(domain) when is_binary(domain) do
+    Logger.debug("CertMagex: sni_fun called with domain: #{domain}")
     provider = Application.get_env(:certmagex, :provider, :letsencrypt)
 
     if ip?(domain) and provider not in [:letsencrypt, :letsencrypt_test] do

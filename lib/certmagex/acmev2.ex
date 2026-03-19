@@ -656,7 +656,8 @@ defmodule CertMagex.Acmev2 do
     csr =
       if CertMagex.ip?(domain) do
         ip_binary = ip_string_to_binary!(domain)
-        san = X509.Certificate.Extension.subject_alt_name([{:ipAddress, ip_binary}])
+        # OTP's public_key uses the GeneralName choice type `iPAddress` (capital P).
+        san = X509.Certificate.Extension.subject_alt_name([{:iPAddress, ip_binary}])
 
         X509.CSR.new(key, "CN=", extension_request: [san])
         |> X509.CSR.to_der()

@@ -11,7 +11,9 @@ domains(Certbin) ->
     SubjectList = subject_list_from_rdn(Subjects),
     Names = lists:flatten([N || {'Extension', {2, 5, 29, 17}, _, N} <- Extensions]),
     DNSNames = [Name || {dNSName, Name} <- Names],
-    IPStrings = [ip_binary_to_string(Bin) || {ipAddress, Bin} <- Names],
+    IPStrings =
+        [ip_binary_to_string(Bin) || {ipAddress, Bin} <- Names] ++
+        [ip_binary_to_string(Bin) || {iPAddress, Bin} <- Names],
     'Elixir.Enum':uniq(SubjectList ++ DNSNames ++ IPStrings).
 
 subject_list_from_rdn([[{'AttributeTypeAndValue', {2, 5, 4, 3}, {printableString, Subject}}]]) ->
