@@ -1,6 +1,21 @@
 defmodule CertMagexTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   doctest CertMagex
+
+  describe "sni_fun/1 and :sni_allowed_hosts" do
+    test "returns :undefined when the hostname is not in the allow list" do
+      previous = Application.get_env(:certmagex, :sni_allowed_hosts)
+      Application.put_env(:certmagex, :sni_allowed_hosts, ["good.example.com"])
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:certmagex, :sni_allowed_hosts, previous),
+          else: Application.delete_env(:certmagex, :sni_allowed_hosts)
+      end)
+
+      assert :undefined = CertMagex.sni_fun("scanner.example.com")
+    end
+  end
 
   describe "ip?/1" do
     test "returns true for IPv4 addresses" do

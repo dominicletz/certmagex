@@ -46,6 +46,7 @@ The following configuration values are optional and can be set in your `config.e
 - `addr`: The address to bind to for the ACME handshake. Defaults to `0.0.0.0` on IPv4 and `::` on IPv6.
 - `storage_module`: The module to use for storage. Defaults to `CertMagex.Storage.Acmev2Adapter`. Changing the module allows storing retrieved certificates in a different storage location.
 - `renewal_threshold`: The threshold for certificate renewal. Defaults to renewing certificates if they have `86_400` seconds (1 day) of validity left.
+- `sni_allowed_hosts`: If set to a **non-empty** list of hostnames, only those names (compared case-insensitively) will trigger certificate handling; any other TLS SNI value yields no certificate and does not run ACME. Useful to avoid spurious Let’s Encrypt requests from internet scanners. If unset or `[]`, every SNI is considered (the previous default).
 
 ### IP address certificates
 
