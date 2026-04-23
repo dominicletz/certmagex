@@ -21,8 +21,17 @@ defmodule CertMagex do
     https: [port: 443, thousand_island_options: [transport_options: [sni_fun: &CertMagex.sni_fun/1]]],
     ...
   ```
+
+  ## SNI hostname allow list (optional)
+
+  With `sni_fun`, each TLS client SNI can trigger a certificate request. To avoid
+  issuing or renewing certificates for random scan traffic, set
+  `config :certmagex, :sni_allowed_hosts, ["www.example.com", "api.example.com"]`.
+  When this list is non-empty, only those hostnames (compared
+  case-insensitively) are handled; any other SNI returns `:undefined` and no
+  ACME work runs. If unset or `[]`, all SNIs are considered (unchanged default).
   """
-  alias CertMagex.{Worker, Storage}
+  alias CertMagex.{Storage, Worker}
   require Logger
 
   def sni_fun(domain) when is_list(domain) do
@@ -42,6 +51,30 @@ defmodule CertMagex do
   """
   def sni_fun(domain) when is_binary(domain) do
     Logger.debug("CertMagex: sni_fun called with domain: #{domain}")
+
+    if sni_host_allowlisted?(domain) do
+      sni_fun_allowed(domain)
+    else
+      :undefined
+    end
+  end
+
+  defp sni_host_allowlisted?(domain) do
+    case Application.get_env(:certmagex, :sni_allowed_hosts) do
+      hosts when is_list(hosts) and hosts != [] ->
+        host_in_sni_list?(domain, hosts)
+
+      _ ->
+        true
+    end
+  end
+
+  defp host_in_sni_list?(domain, hosts) do
+    d = String.downcase(domain)
+    Enum.any?(hosts, &(String.downcase(&1) == d))
+  end
+
+  defp sni_fun_allowed(domain) do
     provider = Application.get_env(:certmagex, :provider, :letsencrypt)
 
     if ip?(domain) and provider not in [:letsencrypt, :letsencrypt_test] do
