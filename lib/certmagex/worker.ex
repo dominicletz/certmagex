@@ -35,8 +35,10 @@ defmodule CertMagex.Worker do
       if last_request + 15 > now do
         {:reply, {:error, :rate_limit}, state}
       else
-        Storage.insert({:last_request, domain}, now)
+        # Record last_request only after a full successful issuance so failed
+        # attempts (e.g. cannot bind port 80) do not trigger the 15s / 3s retry loop.
         {cert_priv_key, public_cert} = Acmev2.gen_cert(domain)
+        Storage.insert({:last_request, domain}, System.os_time(:second))
         :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
         {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
         {:reply, {:ok, {{certs, key}, validity}}, state}

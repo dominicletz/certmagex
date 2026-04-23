@@ -52,6 +52,10 @@ defmodule CertMagex.Acmev2 do
     port
   end
 
+  defp http_challenge_document_root do
+    Path.join(System.tmp_dir!(), "zerossl_httpd")
+  end
+
   defp provider(), do: Application.get_env(@app, :provider, :letsencrypt)
   defp require_external_account_binding(), do: provider() in [:zerossl]
 
@@ -600,13 +604,12 @@ defmodule CertMagex.Acmev2 do
     end
   end
 
-  defp serve(token) do
-    base = Path.join(System.tmp_dir!(), "zerossl_httpd")
-    path = Path.join(base, ".well-known/acme-challenge/#{token}")
-    File.mkdir_p!(Path.dirname(path))
-    File.write(path, gen_key_authorization(token))
+  defp start_http_challenge_server do
+    base = http_challenge_document_root()
+    File.mkdir_p!(base)
 
     port = http_port()
+    Logger.debug("Start HTTP challenge server (bind #{port})")
 
     {:ok, bind_address} =
       http_addr()
@@ -630,6 +633,13 @@ defmodule CertMagex.Acmev2 do
       )
 
     pid
+  end
+
+  defp place_challenge_token(token) do
+    base = http_challenge_document_root()
+    path = Path.join(base, ".well-known/acme-challenge/#{token}")
+    File.mkdir_p!(Path.dirname(path))
+    File.write(path, gen_key_authorization(token))
   end
 
   defp stop_serving(pid) do
@@ -796,9 +806,9 @@ defmodule CertMagex.Acmev2 do
   for the following interactions with Zerossl service APIs
 
   The authentication method relies on the HTTP (not DNS). For it to work
-  `gen_cert` opens a listening socket on port 80 where it serves the
-  well-known file retrieved from the APIs exchange. When the procedure
-  completes the socket is closed.
+  `gen_cert` opens a listening socket on the configured HTTP port (default 80)
+  before contacting the ACME API, then writes the well-known challenge file once
+  the token is known. When the procedure completes the socket is closed.
 
   By demonstrating the ownership of the site the user gets trusted by
   the Zerossl service and the certificate is emitted.
@@ -844,77 +854,81 @@ defmodule CertMagex.Acmev2 do
   defp do_gen_cert(domain, eab_credentials) do
     Logger.debug("Generating cert for domain #{domain}")
 
-    Logger.debug("Get operations")
-    ops = get_operations()
+    pid = start_http_challenge_server()
 
-    Logger.debug("Get nonce")
-    nonce = get_new_nonce(ops)
+    try do
+      Logger.debug("Get operations")
+      ops = get_operations()
 
-    Logger.debug("Check or forge ec.key")
-    _eckey = ensure_ec_key()
+      Logger.debug("Get nonce")
+      nonce = get_new_nonce(ops)
 
-    Logger.debug("Get new account")
-    {nonce, account_location, _new_account_res} = post_new_account(ops, nonce, eab_credentials)
+      Logger.debug("Check or forge ec.key")
+      _eckey = ensure_ec_key()
 
-    Logger.debug("Get new order")
-    {nonce, new_order_res} = post_new_order(ops, domain, account_location, nonce)
+      Logger.debug("Get new account")
+      {nonce, account_location, _new_account_res} = post_new_account(ops, nonce, eab_credentials)
 
-    Logger.debug("Get challanges (authz)")
-    {nonce, chall_uri, token} = post_authz(account_location, nonce, new_order_res.authorizations)
+      Logger.debug("Get new order")
+      {nonce, new_order_res} = post_new_order(ops, domain, account_location, nonce)
 
-    Logger.debug("Serving well known challenge token")
-    pid = serve(token)
+      Logger.debug("Get challanges (authz)")
+      {nonce, chall_uri, token} = post_authz(account_location, nonce, new_order_res.authorizations)
 
-    Logger.debug("Asking to challenge http.1")
-    [nonce, %{token: ^token}] = post_chall(nonce, [account_location, chall_uri])
+      Logger.debug("Writing well-known challenge token")
+      place_challenge_token(token)
 
-    Logger.debug("Checking challenge http.1 validity")
+      Logger.debug("Asking to challenge http.1")
+      [nonce, %{token: ^token}] = post_chall(nonce, [account_location, chall_uri])
 
-    [nonce, _authz_response] =
-      processing_state_retry(
-        &poll_authz/2,
-        nonce,
-        [account_location, new_order_res.authorizations |> hd],
-        ["valid"]
-      )
+      Logger.debug("Checking challenge http.1 validity")
 
-    Logger.debug("Challenge http.1 checking valid")
+      [nonce, _authz_response] =
+        processing_state_retry(
+          &poll_authz/2,
+          nonce,
+          [account_location, new_order_res.authorizations |> hd],
+          ["valid"]
+        )
 
-    Logger.debug("Finalizing order")
-    {cert_priv_key, csr} = gen_csr(domain)
+      Logger.debug("Challenge http.1 checking valid")
 
-    [nonce, _body, final_order_location_uri] =
-      processing_state_retry(
-        &post_finalize/2,
-        nonce,
-        [csr, new_order_res.finalize, account_location],
-        ["processing", "valid"]
-      )
+      Logger.debug("Finalizing order")
+      {cert_priv_key, csr} = gen_csr(domain)
 
-    Process.sleep(15)
+      [nonce, _body, final_order_location_uri] =
+        processing_state_retry(
+          &post_finalize/2,
+          nonce,
+          [csr, new_order_res.finalize, account_location],
+          ["processing", "valid"]
+        )
 
-    Logger.debug("Get final certificate URL")
+      Process.sleep(15)
 
-    [nonce, response] =
-      processing_state_retry(
-        &post_final_order/2,
-        nonce,
-        [
-          final_order_location_uri,
-          account_location
-        ],
-        ["valid"]
-      )
+      Logger.debug("Get final certificate URL")
 
-    Logger.debug("Getting certificate")
+      [nonce, response] =
+        processing_state_retry(
+          &post_final_order/2,
+          nonce,
+          [
+            final_order_location_uri,
+            account_location
+          ],
+          ["valid"]
+        )
 
-    public_cert = get_final_cert(nonce, response.certificate, account_location)
+      Logger.debug("Getting certificate")
 
-    stop_serving(pid)
+      public_cert = get_final_cert(nonce, response.certificate, account_location)
 
-    {cert_priv_key, public_cert}
-    # Now you can
-    # File.write("cert.pem", public_cert)
-    # File.write("key.pem", cert_priv_key)
+      {cert_priv_key, public_cert}
+      # Now you can
+      # File.write("cert.pem", public_cert)
+      # File.write("key.pem", cert_priv_key)
+    after
+      stop_serving(pid)
+    end
   end
 end

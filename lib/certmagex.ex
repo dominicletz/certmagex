@@ -95,9 +95,15 @@ defmodule CertMagex do
   This will generate `[cert: cert, key: key]` that can merged into your existing SSL options.
   """
   def ssl_opts(domain) do
-    case sni_fun(domain) do
-      opts when is_list(opts) -> opts
-      _ -> []
+    try do
+      case sni_fun(domain) do
+        opts when is_list(opts) -> opts
+        _ -> []
+      end
+    catch
+      :exit, reason ->
+        Logger.error("CertMagex: ssl_opts failed for #{inspect(domain)}: #{inspect(reason)}")
+        []
     end
   end
 
