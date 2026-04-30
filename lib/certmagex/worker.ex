@@ -29,28 +29,39 @@ defmodule CertMagex.Worker do
   def handle_call({:gen_cert, domain}, _from, state) do
     result = lookup_domain(domain)
 
-    if needs_renewal(result) do
-      now = System.os_time(:second)
-      last_request = Storage.lookup({:last_request, domain}) || 0
-
-      if last_request + 15 > now do
-        {:reply, {:error, :rate_limit}, state}
+    reply =
+      if needs_renewal(result) do
+        gen_cert_with_rate_limit(domain)
       else
-        # Record last_request only after a full successful issuance so failed
-        # attempts (e.g. cannot bind port 80) do not trigger the 15s / 3s retry loop.
-        case generate_cert(domain) do
-          {:ok, {cert_priv_key, public_cert}} ->
-            Storage.insert({:last_request, domain}, System.os_time(:second))
-            :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
-            {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
-            {:reply, {:ok, {{certs, key}, validity}}, state}
-
-          {:error, reason} ->
-            {:reply, {:error, reason}, state}
-        end
+        {:ok, result}
       end
+
+    {:reply, reply, state}
+  end
+
+  defp gen_cert_with_rate_limit(domain) do
+    now = System.os_time(:second)
+    last_request = Storage.lookup({:last_request, domain}) || 0
+
+    if last_request + 15 > now do
+      {:error, :rate_limit}
     else
-      {:reply, {:ok, result}, state}
+      persist_and_pack_cert(domain)
+    end
+  end
+
+  # Record last_request only after a full successful issuance so failed attempts
+  # (e.g. cannot bind port 80) do not trigger the 15s / 3s retry loop.
+  defp persist_and_pack_cert(domain) do
+    case generate_cert(domain) do
+      {:ok, {cert_priv_key, public_cert}} ->
+        Storage.insert({:last_request, domain}, System.os_time(:second))
+        :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
+        {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
+        {:ok, {{certs, key}, validity}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
