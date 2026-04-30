@@ -46,6 +46,27 @@ defmodule CertMagexTest do
     end
   end
 
+  describe "Worker.gen_cert/1" do
+    test "reports generation errors without crashing the worker" do
+      previous = Application.get_env(:certmagex, :provider)
+      domain = "192.0.2.250"
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:certmagex, :provider, previous),
+          else: Application.delete_env(:certmagex, :provider)
+      end)
+
+      Application.put_env(:certmagex, :provider, :zerossl)
+      CertMagex.Storage.delete({:cache, domain})
+      CertMagex.Storage.delete(domain)
+
+      assert {:error, %RuntimeError{message: message}} = CertMagex.Worker.gen_cert(domain)
+      assert message =~ "IP certificates are only supported"
+      assert %CertMagex.Worker{} = :sys.get_state(CertMagex.Worker)
+    end
+  end
+
   describe "IP SAN CSR generation" do
     defp ip_string_to_binary!(ip_string) do
       case :inet.parse_address(String.to_charlist(ip_string)) do

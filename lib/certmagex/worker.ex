@@ -1,6 +1,7 @@
 defmodule CertMagex.Worker do
   @moduledoc false
   alias CertMagex.{Acmev2, Storage}
+  require Logger
   use GenServer, restart: :permanent
   defstruct []
 
@@ -37,11 +38,16 @@ defmodule CertMagex.Worker do
       else
         # Record last_request only after a full successful issuance so failed
         # attempts (e.g. cannot bind port 80) do not trigger the 15s / 3s retry loop.
-        {cert_priv_key, public_cert} = Acmev2.gen_cert(domain)
-        Storage.insert({:last_request, domain}, System.os_time(:second))
-        :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
-        {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
-        {:reply, {:ok, {{certs, key}, validity}}, state}
+        case generate_cert(domain) do
+          {:ok, {cert_priv_key, public_cert}} ->
+            Storage.insert({:last_request, domain}, System.os_time(:second))
+            :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
+            {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
+            {:reply, {:ok, {{certs, key}, validity}}, state}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, state}
+        end
       end
     else
       {:reply, {:ok, result}, state}
@@ -71,5 +77,29 @@ defmodule CertMagex.Worker do
       {:ok, {cert_priv_key, public_cert}} -> CertMagex.insert(domain, cert_priv_key, public_cert)
       nil -> nil
     end
+  end
+
+  defp generate_cert(domain) do
+    {:ok, Acmev2.gen_cert(domain)}
+  rescue
+    error ->
+      stacktrace = __STACKTRACE__
+
+      Logger.error([
+        "CertMagex: certificate generation failed for #{domain}\n",
+        Exception.format(:error, error, stacktrace)
+      ])
+
+      {:error, error}
+  catch
+    kind, reason ->
+      stacktrace = __STACKTRACE__
+
+      Logger.error([
+        "CertMagex: certificate generation failed for #{domain}\n",
+        Exception.format(kind, reason, stacktrace)
+      ])
+
+      {:error, {kind, reason}}
   end
 end

@@ -873,7 +873,9 @@ defmodule CertMagex.Acmev2 do
       {nonce, new_order_res} = post_new_order(ops, domain, account_location, nonce)
 
       Logger.debug("Get challanges (authz)")
-      {nonce, chall_uri, token} = post_authz(account_location, nonce, new_order_res.authorizations)
+
+      {nonce, chall_uri, token} =
+        post_authz(account_location, nonce, new_order_res.authorizations)
 
       Logger.debug("Writing well-known challenge token")
       place_challenge_token(token)
