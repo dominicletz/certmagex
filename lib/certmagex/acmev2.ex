@@ -453,7 +453,16 @@ defmodule CertMagex.Acmev2 do
       post(ops[:newOrder], body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(new_order_res)
-    {new_nonce, Jason.decode!(bin, keys: :atoms)}
+    decoded = Jason.decode!(bin, keys: :atoms)
+
+    order_result =
+      if new_order_res.status_code == 201 do
+        {:ok, decoded}
+      else
+        {:error, decoded}
+      end
+
+    {new_nonce, order_result}
   end
 
   defp post_authz(account_location, nonce, [authorization]) do
@@ -813,13 +822,14 @@ defmodule CertMagex.Acmev2 do
   By demonstrating the ownership of the site the user gets trusted by
   the Zerossl service and the certificate is emitted.
 
-  The function returns a key and its related certificate. Those
-  can be used to run a trusted HTTPs server.
+  The function returns `{:ok, {key, cert}}` on success. ACME problem responses
+  (e.g. rate limits) return `{:error, {:acme_problem, map}}` instead of raising.
 
   The key and certificate values are in binary encoded format and can be
   directly written on a file
   """
-  @spec gen_cert(domain :: binary()) :: {key :: binary(), cert :: binary()}
+  @spec gen_cert(domain :: binary()) ::
+          {:ok, {key :: binary(), cert :: binary()}} | {:error, term()}
   def gen_cert(domain) do
     if CertMagex.ip?(domain) and provider() not in [:letsencrypt, :letsencrypt_test] do
       raise(
@@ -848,7 +858,10 @@ defmodule CertMagex.Acmev2 do
           get_eab_credentials(user)
       end
 
-    do_gen_cert(domain, eab_credentials)
+    case do_gen_cert(domain, eab_credentials) do
+      {:ok, _} = ok -> ok
+      {:error, _} = err -> err
+    end
   end
 
   defp do_gen_cert(domain, eab_credentials) do
@@ -870,67 +883,86 @@ defmodule CertMagex.Acmev2 do
       {nonce, account_location, _new_account_res} = post_new_account(ops, nonce, eab_credentials)
 
       Logger.debug("Get new order")
-      {nonce, new_order_res} = post_new_order(ops, domain, account_location, nonce)
+      {nonce, new_order_result} = post_new_order(ops, domain, account_location, nonce)
 
-      Logger.debug("Get challanges (authz)")
+      case new_order_result do
+        {:error, problem} ->
+          Logger.error(
+            "CertMagex: ACME newOrder failed for #{domain}: #{acme_problem_summary(problem)}"
+          )
 
-      {nonce, chall_uri, token} =
-        post_authz(account_location, nonce, new_order_res.authorizations)
+          {:error, {:acme_problem, problem}}
 
-      Logger.debug("Writing well-known challenge token")
-      place_challenge_token(token)
+        {:ok, new_order_res} ->
+          Logger.debug("Get challanges (authz)")
 
-      Logger.debug("Asking to challenge http.1")
-      [nonce, %{token: ^token}] = post_chall(nonce, [account_location, chall_uri])
+          {nonce, chall_uri, token} =
+            post_authz(account_location, nonce, new_order_res.authorizations)
 
-      Logger.debug("Checking challenge http.1 validity")
+          Logger.debug("Writing well-known challenge token")
+          place_challenge_token(token)
 
-      [nonce, _authz_response] =
-        processing_state_retry(
-          &poll_authz/2,
-          nonce,
-          [account_location, new_order_res.authorizations |> hd],
-          ["valid"]
-        )
+          Logger.debug("Asking to challenge http.1")
+          [nonce, %{token: ^token}] = post_chall(nonce, [account_location, chall_uri])
 
-      Logger.debug("Challenge http.1 checking valid")
+          Logger.debug("Checking challenge http.1 validity")
 
-      Logger.debug("Finalizing order")
-      {cert_priv_key, csr} = gen_csr(domain)
+          [nonce, _authz_response] =
+            processing_state_retry(
+              &poll_authz/2,
+              nonce,
+              [account_location, new_order_res.authorizations |> hd],
+              ["valid"]
+            )
 
-      [nonce, _body, final_order_location_uri] =
-        processing_state_retry(
-          &post_finalize/2,
-          nonce,
-          [csr, new_order_res.finalize, account_location],
-          ["processing", "valid"]
-        )
+          Logger.debug("Challenge http.1 checking valid")
 
-      Process.sleep(15)
+          Logger.debug("Finalizing order")
+          {cert_priv_key, csr} = gen_csr(domain)
 
-      Logger.debug("Get final certificate URL")
+          [nonce, _body, final_order_location_uri] =
+            processing_state_retry(
+              &post_finalize/2,
+              nonce,
+              [csr, new_order_res.finalize, account_location],
+              ["processing", "valid"]
+            )
 
-      [nonce, response] =
-        processing_state_retry(
-          &post_final_order/2,
-          nonce,
-          [
-            final_order_location_uri,
-            account_location
-          ],
-          ["valid"]
-        )
+          Process.sleep(15)
 
-      Logger.debug("Getting certificate")
+          Logger.debug("Get final certificate URL")
 
-      public_cert = get_final_cert(nonce, response.certificate, account_location)
+          [nonce, response] =
+            processing_state_retry(
+              &post_final_order/2,
+              nonce,
+              [
+                final_order_location_uri,
+                account_location
+              ],
+              ["valid"]
+            )
 
-      {cert_priv_key, public_cert}
-      # Now you can
-      # File.write("cert.pem", public_cert)
-      # File.write("key.pem", cert_priv_key)
+          Logger.debug("Getting certificate")
+
+          public_cert = get_final_cert(nonce, response.certificate, account_location)
+
+          {:ok, {cert_priv_key, public_cert}}
+          # Now you can
+          # File.write("cert.pem", public_cert)
+          # File.write("key.pem", cert_priv_key)
+      end
     after
       stop_serving(pid)
     end
   end
+
+  defp acme_problem_summary(problem) when is_map(problem) do
+    type = Map.get(problem, :type, "")
+    detail = Map.get(problem, :detail, "")
+    status = Map.get(problem, :status, "")
+    "HTTP #{status} #{type} — #{detail}"
+  end
+
+  defp acme_problem_summary(problem), do: inspect(problem)
 end

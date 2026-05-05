@@ -173,6 +173,9 @@ defmodule CertMagex do
       {:ok, {{cert, key}, _validity}} ->
         [cert: cert, key: key]
 
+      {:error, {:acme_problem, _}} ->
+        []
+
       {:error, reason} ->
         Logger.error("CertMagex Error: #{inspect(reason)}")
         []

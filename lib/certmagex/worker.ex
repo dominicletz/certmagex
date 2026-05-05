@@ -91,7 +91,13 @@ defmodule CertMagex.Worker do
   end
 
   defp generate_cert(domain) do
-    {:ok, Acmev2.gen_cert(domain)}
+    case Acmev2.gen_cert(domain) do
+      {:ok, {cert_priv_key, public_cert}} ->
+        {:ok, {cert_priv_key, public_cert}}
+
+      {:error, _} = err ->
+        err
+    end
   rescue
     error ->
       stacktrace = __STACKTRACE__
