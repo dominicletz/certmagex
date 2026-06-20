@@ -23,7 +23,10 @@ defmodule CertMagex.Storage do
     @type value :: term()
 
     @callback child() :: :supervisor.child_spec() | {module(), term()} | module() | :ignore
-    @callback insert(key(), value()) :: any()
+    # Must return `:ok` — the worker pattern-matches `:ok = Storage.insert(...)`
+    # after issuing a cert. (The default Dets backend returns `:ok` via
+    # `DetsPlus.start_sync/1`.)
+    @callback insert(key(), value()) :: :ok
     @callback delete(key()) :: any()
     @callback lookup(key()) :: value() | nil
   end
