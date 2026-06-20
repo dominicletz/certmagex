@@ -14,9 +14,9 @@ defmodule CertMagex.Storage do
     @moduledoc """
     Behaviour for a CertMagex storage backend.
 
-    `child/0` returns a supervisor child (or `:ignore`) started before the
-    worker. The other callbacks read/write/delete arbitrary Erlang-term keys and
-    values (CertMagex uses binaries like `"ec.key"` and tuples like
+    `child/0` returns a supervisor child (or `:ignore` if the backend needs no
+    process). The other callbacks read/write/delete arbitrary Erlang-term keys
+    and values (CertMagex uses binaries like `"ec.key"` and tuples like
     `{:acmev2, key}`, `{:cache, domain}`, `{:last_request, domain}`).
     """
     @type key :: term()
@@ -50,26 +50,32 @@ defmodule CertMagex.Storage do
     @moduledoc false
     @behaviour CertMagex.Storage.Backend
 
+    # DETS stores the table name in the file header, so opening an existing
+    # `storage.dets+` with a different name fails (`{:error, {:name_mismatch,
+    # ...}}`). Keep the historical name (`CertMagex.Storage`) — NOT `__MODULE__`
+    # (which would be `CertMagex.Storage.Dets`) — so upgrades don't break.
+    @name CertMagex.Storage
+
     @impl true
     def child() do
       File.mkdir_p!(directory())
-      {DetsPlus, name: __MODULE__, file: Path.join(directory(), "storage.dets+")}
+      {DetsPlus, name: @name, file: Path.join(directory(), "storage.dets+")}
     end
 
     @impl true
     def insert(key, value) do
-      DetsPlus.insert(__MODULE__, {key, value})
-      DetsPlus.start_sync(__MODULE__)
+      DetsPlus.insert(@name, {key, value})
+      DetsPlus.start_sync(@name)
     end
 
     @impl true
     def delete(key) do
-      DetsPlus.delete(__MODULE__, key)
+      DetsPlus.delete(@name, key)
     end
 
     @impl true
     def lookup(key) do
-      case DetsPlus.lookup(__MODULE__, key) do
+      case DetsPlus.lookup(@name, key) do
         [{^key, value}] -> value
         _ -> nil
       end
@@ -81,10 +87,26 @@ defmodule CertMagex.Storage do
     end
   end
 
+  # Placeholder child for backends that need no process of their own (those
+  # whose `child/0` returns `:ignore`). `:ignore` is not a valid entry in a
+  # supervisor's children list, so we wrap it in a worker that starts as
+  # `:ignore` — the supervisor then simply skips it.
+  defmodule EmptyWorker do
+    @moduledoc false
+    def start_link(_args), do: :ignore
+    def child_spec(arg), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [arg]}}
+  end
+
   @doc false
   def backend(), do: Application.get_env(:certmagex, :storage_backend, Dets)
 
-  def child(), do: backend().child()
+  def child() do
+    case backend().child() do
+      :ignore -> {EmptyWorker, []}
+      spec -> spec
+    end
+  end
+
   def insert(key, value), do: backend().insert(key, value)
   def delete(key), do: backend().delete(key)
   def lookup(key), do: backend().lookup(key)
