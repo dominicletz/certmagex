@@ -67,7 +67,7 @@ defmodule CertMagex.Storage do
 
     @impl true
     def insert(key, value) do
-      DetsPlus.insert(@name, {key, value})
+      :ok = DetsPlus.insert(@name, {key, value})
       DetsPlus.start_sync(@name)
     end
 

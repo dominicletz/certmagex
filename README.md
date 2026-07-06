@@ -45,8 +45,33 @@ The following configuration values are optional and can be set in your `config.e
 - `account_key`: The account key to use for the ACME handshake. Required only for `:zerossl` provider.
 - `addr`: The address to bind to for the ACME handshake. Defaults to `0.0.0.0` on IPv4 and `::` on IPv6.
 - `storage_module`: The module to use for storage. Defaults to `CertMagex.Storage.Acmev2Adapter`. Changing the module allows storing retrieved certificates in a different storage location.
+- `storage_backend`: The low-level key/value store for all CertMagex persisted data. Defaults to `CertMagex.Storage.Dets` (on-disk DetsPlus store). Configure with `config :certmagex, :storage_backend, MyApp.CertStorage`. Unlike `storage_module` — the ACME adapter Zerossl calls for account keys and EAB credentials — the backend provides generic `insert`, `lookup`, and `delete` for arbitrary Erlang-term keys and values (e.g. `{:acmev2, key}`, `{:cache, domain}`).
 - `renewal_threshold`: The threshold for certificate renewal. Defaults to renewing certificates if they have `86_400` seconds (1 day) of validity left.
 - `sni_allowed_hosts`: If set to a **non-empty** list of hostnames, only those names (compared case-insensitively) will trigger certificate handling; any other TLS SNI value yields no certificate and does not run ACME. Useful to avoid spurious Let’s Encrypt requests from internet scanners. If unset or `[]`, every SNI is considered (the previous default).
+
+### Custom storage backend
+
+A backend implements the `CertMagex.Storage.Backend` behaviour:
+
+```elixir
+defmodule MyApp.CertStorage do
+  @behaviour CertMagex.Storage.Backend
+
+  @impl true
+  def child, do: :ignore
+
+  @impl true
+  def insert(_key, _value), do: :ok
+
+  @impl true
+  def delete(_key), do: :ok
+
+  @impl true
+  def lookup(_key), do: nil
+end
+```
+
+Return a supervisor child spec from `child/0` when the backend needs its own process (as `CertMagex.Storage.Dets` does with DetsPlus); return `:ignore` if it does not.
 
 ### IP address certificates
 
