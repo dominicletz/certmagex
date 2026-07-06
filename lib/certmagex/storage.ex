@@ -1,15 +1,6 @@
 defmodule CertMagex.Storage do
   @moduledoc false
 
-  # Pluggable storage backend. Defaults to the on-disk DetsPlus store
-  # (`CertMagex.Storage.Dets`), so existing setups are unchanged. Provide a
-  # custom backend — e.g. a database-backed, encrypted store for durability and
-  # clustering — with:
-  #
-  #     config :certmagex, :storage_backend, MyApp.CertStorage
-  #
-  # A backend implements the `CertMagex.Storage.Backend` behaviour.
-
   defmodule Backend do
     @moduledoc """
     Behaviour for a CertMagex storage backend.
@@ -97,11 +88,9 @@ defmodule CertMagex.Storage do
   defmodule EmptyWorker do
     @moduledoc false
     def start_link(_args), do: :ignore
-    def child_spec(arg), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [arg]}}
   end
 
-  @doc false
-  def backend(), do: Application.get_env(:certmagex, :storage_backend, Dets)
+  defp backend(), do: Application.get_env(:certmagex, :storage_backend, Dets)
 
   def child() do
     case backend().child() do

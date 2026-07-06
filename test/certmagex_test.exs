@@ -42,6 +42,19 @@ defmodule CertMagexTest do
   use ExUnit.Case, async: false
   doctest CertMagex
 
+  defp with_storage_backend(backend, fun) do
+    previous = Application.get_env(:certmagex, :storage_backend)
+    Application.put_env(:certmagex, :storage_backend, backend)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:certmagex, :storage_backend, previous),
+        else: Application.delete_env(:certmagex, :storage_backend)
+    end)
+
+    fun.()
+  end
+
   describe "sni_fun/1 and :sni_allowed_hosts" do
     test "returns :undefined when the hostname is not in the allow list" do
       previous = Application.get_env(:certmagex, :sni_allowed_hosts)
@@ -111,41 +124,24 @@ defmodule CertMagexTest do
     test "Dets backend keeps historical DETS table name for upgrades" do
       assert {DetsPlus, opts} = CertMagex.Storage.Dets.child()
       assert opts[:name] == CertMagex.Storage
-      refute opts[:name] == CertMagex.Storage.Dets
     end
 
     test "insert/lookup/delete delegate to configured backend" do
-      previous = Application.get_env(:certmagex, :storage_backend)
-      {:ok, pid} = Agent.start_link(fn -> %{} end, name: CertMagexTest.AgentBackend)
+      with_storage_backend(CertMagexTest.AgentBackend, fn ->
+        {:ok, pid} = Agent.start_link(fn -> %{} end, name: CertMagexTest.AgentBackend)
+        on_exit(fn -> if Process.alive?(pid), do: Agent.stop(pid, :normal) end)
 
-      on_exit(fn ->
-        if Process.alive?(pid), do: Agent.stop(pid, :normal)
-
-        if previous,
-          do: Application.put_env(:certmagex, :storage_backend, previous),
-          else: Application.delete_env(:certmagex, :storage_backend)
+        assert :ok = CertMagex.Storage.insert("ec.key", "secret")
+        assert "secret" = CertMagex.Storage.lookup("ec.key")
+        CertMagex.Storage.delete("ec.key")
+        assert CertMagex.Storage.lookup("ec.key") == nil
       end)
-
-      Application.put_env(:certmagex, :storage_backend, CertMagexTest.AgentBackend)
-
-      assert :ok = CertMagex.Storage.insert("ec.key", "secret")
-      assert "secret" = CertMagex.Storage.lookup("ec.key")
-      CertMagex.Storage.delete("ec.key")
-      assert CertMagex.Storage.lookup("ec.key") == nil
     end
 
     test "backend child/0 returning :ignore yields EmptyWorker child spec" do
-      previous = Application.get_env(:certmagex, :storage_backend)
-
-      on_exit(fn ->
-        if previous,
-          do: Application.put_env(:certmagex, :storage_backend, previous),
-          else: Application.delete_env(:certmagex, :storage_backend)
+      with_storage_backend(CertMagexTest.IgnoreBackend, fn ->
+        assert {CertMagex.Storage.EmptyWorker, []} = CertMagex.Storage.child()
       end)
-
-      Application.put_env(:certmagex, :storage_backend, CertMagexTest.IgnoreBackend)
-
-      assert {CertMagex.Storage.EmptyWorker, []} = CertMagex.Storage.child()
     end
   end
 
