@@ -35,7 +35,7 @@ defmodule CertMagex.MixProject do
   defp deps do
     [
       {:dets_plus, "~> 2.4"},
-      {:httpoison, "~> 2.0"},
+      {:req, "~> 0.5"},
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.2", only: [:dev], runtime: false},
