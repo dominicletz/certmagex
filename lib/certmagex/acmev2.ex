@@ -208,7 +208,7 @@ defmodule CertMagex.Acmev2 do
 
         case user_id_type do
           :account_key ->
-            {:ok, %HTTPoison.Response{body: bin, status_code: 200}} =
+            {:ok, %Req.Response{status: 200, body: bin}} =
               post(
                 "https://api.zerossl.com/acme/eab-credentials?access_key=#{user_id}",
                 "",
@@ -218,7 +218,7 @@ defmodule CertMagex.Acmev2 do
             store_eab_to_file_and_dec(bin)
 
           :user_email ->
-            {:ok, %HTTPoison.Response{body: bin, status_code: 200}} =
+            {:ok, %Req.Response{status: 200, body: bin}} =
               post(
                 "https://api.zerossl.com/acme/eab-credentials-email",
                 "email=#{user_id}",
@@ -251,36 +251,58 @@ defmodule CertMagex.Acmev2 do
 
       _ ->
         try do
-          {:ok, _response} = HTTPoison.request(method, uri, body, headers, recv_timeout: 10_000)
+          # Headers arrive as a mix of string- and atom-keyed tuples across the
+          # ACME call sites; normalize to string keys for Req. decode_body: false
+          # keeps the raw JSON/JOSE body for the callers' own Jason.decode; Req's
+          # own retry is off because this function already loops on failure, and
+          # redirects are not followed (HTTPoison behavior — an ACME POST binds
+          # the request URL into the JWS protected header, so a transparently
+          # re-POSTed redirect would fail signature validation anyway).
+          req_headers = Enum.map(headers, fn {k, v} -> {to_string(k), v} end)
+
+          {:ok,
+           Req.request!(
+             method: method,
+             url: uri,
+             body: body,
+             headers: req_headers,
+             decode_body: false,
+             retry: false,
+             redirect: false,
+             receive_timeout: 10_000
+           )}
         rescue
           error ->
             Logger.info("Troubles contacting ACMEv2 provider: #{inspect(error)}")
-            request(uri, method, body, headers, times - 1)
+            request(method, uri, body, headers, times - 1)
         end
     end
   end
 
   defp get_operations() do
     {:ok, res} = get(acme_uri())
-    if res.status_code != 200, do: raise("Cannot get operations")
+    if res.status != 200, do: raise("Cannot get operations")
 
     jdec(res.body)
   end
 
   defp get_new_nonce(ops) do
     {:ok, res} = get(ops[:newNonce])
-    if res.status_code != 204, do: raise("Cannot get new nonce")
+    if res.status != 204, do: raise("Cannot get new nonce")
     get_nonce_from_resp(res)
   end
 
   defp get_nonce_from_resp(res) do
-    {_, nonce} = List.keyfind!(res.headers, "Replay-Nonce", 0)
+    # Req normalizes response headers to a lowercased map of value lists.
+    [nonce | _] = Req.Response.get_header(res, "replay-nonce")
     nonce
   end
 
   defp get_location_from_resp(res) do
-    {_, location} = List.keyfind(res.headers, "Location", 0, {:error, nil})
-    location
+    case Req.Response.get_header(res, "location") do
+      [location | _] -> location
+      [] -> nil
+    end
   end
 
   defp post_new_account(ops, nonce, eab_credentials) do
@@ -401,10 +423,10 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = new_account_res} =
+    {:ok, %Req.Response{body: bin} = new_account_res} =
       post(ops[:newAccount], body, "Content-Type": "application/jose+json")
 
-    if new_account_res.status_code != 200 and new_account_res.status_code != 201,
+    if new_account_res.status != 200 and new_account_res.status != 201,
       do: raise("Cannot generate new_account: #{inspect(new_account_res)}")
 
     new_nonce = get_nonce_from_resp(new_account_res)
@@ -449,14 +471,14 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = new_order_res} =
+    {:ok, %Req.Response{body: bin} = new_order_res} =
       post(ops[:newOrder], body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(new_order_res)
     decoded = Jason.decode!(bin, keys: :atoms)
 
     order_result =
-      if new_order_res.status_code == 201 do
+      if new_order_res.status == 201 do
         {:ok, decoded}
       else
         {:error, decoded}
@@ -485,7 +507,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = authz_res} =
+    {:ok, %Req.Response{body: bin} = authz_res} =
       post(authorization, body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(authz_res)
@@ -545,7 +567,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = chall_res} =
+    {:ok, %Req.Response{body: bin} = chall_res} =
       post(chall_uri, body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(chall_res)
@@ -574,7 +596,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = authz_res} =
+    {:ok, %Req.Response{body: bin} = authz_res} =
       post(authz_uri, body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(authz_res)
@@ -728,7 +750,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = finalize_res} =
+    {:ok, %Req.Response{body: bin} = finalize_res} =
       post(finalize_uri, body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(finalize_res)
@@ -756,7 +778,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin}} =
+    {:ok, %Req.Response{body: bin}} =
       post(certificate_uri, body, "Content-Type": "application/jose+json")
 
     bin
@@ -782,7 +804,7 @@ defmodule CertMagex.Acmev2 do
       }
       |> jenc()
 
-    {:ok, %HTTPoison.Response{body: bin} = final_order_res} =
+    {:ok, %Req.Response{body: bin} = final_order_res} =
       post(order_location_url, body, "Content-Type": "application/jose+json")
 
     new_nonce = get_nonce_from_resp(final_order_res)
