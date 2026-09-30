@@ -43,10 +43,22 @@ defmodule CertMagex.Worker do
     now = System.os_time(:second)
     last_request = Storage.lookup({:last_request, domain}) || 0
 
-    if last_request + 15 > now do
-      {:error, :rate_limit}
-    else
-      persist_and_pack_cert(domain)
+    cond do
+      last_request + 15 > now ->
+        {:error, :rate_limit}
+
+      in_fail_backoff?(domain, now) ->
+        {:error, {:acme_problem, %{type: "backoff", detail: "backing off after recent failure"}}}
+
+      true ->
+        persist_and_pack_cert(domain)
+    end
+  end
+
+  defp in_fail_backoff?(domain, now) do
+    case Storage.lookup({:last_fail, domain}) do
+      until when is_integer(until) -> until > now
+      _ -> false
     end
   end
 
@@ -56,14 +68,47 @@ defmodule CertMagex.Worker do
     case generate_cert(domain) do
       {:ok, {cert_priv_key, public_cert}} ->
         Storage.insert({:last_request, domain}, System.os_time(:second))
+        Storage.delete({:last_fail, domain})
         :ok = Storage.insert(domain, {:ok, {cert_priv_key, public_cert}})
         {{certs, key}, validity} = CertMagex.insert(domain, cert_priv_key, public_cert)
         {:ok, {{certs, key}, validity}}
 
       {:error, reason} ->
+        Storage.insert(
+          {:last_fail, domain},
+          System.os_time(:second) + fail_backoff_seconds(reason)
+        )
+
         {:error, reason}
     end
   end
+
+  defp fail_backoff_seconds({:acme_problem, problem}), do: acme_backoff_seconds(problem)
+  defp fail_backoff_seconds(_), do: 300
+
+  defp acme_backoff_seconds(%{detail: detail}) when is_binary(detail) do
+    case Regex.run(~r/retry after (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, detail) do
+      [_, stamp] ->
+        case NaiveDateTime.from_iso8601(String.replace(stamp, " ", "T")) do
+          {:ok, ndt} ->
+            max(
+              60,
+              min(
+                DateTime.diff(DateTime.from_naive!(ndt, "Etc/UTC"), DateTime.utc_now()),
+                7 * 24 * 3600
+              )
+            )
+
+          _ ->
+            3600
+        end
+
+      _ ->
+        3600
+    end
+  end
+
+  defp acme_backoff_seconds(_), do: 3600
 
   @impl true
   def handle_cast({:gen_cert, domain}, state) do
